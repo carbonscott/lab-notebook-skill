@@ -54,13 +54,32 @@ Summarize the key insight in 1-3 sentences. Do not dump the entire conversation 
 
 ### Schema-defined flags
 
-CLI flags are generated dynamically from the notebook's `schema.yaml`. Run `lab-notebook schema` to see available fields and their types.
+CLI flags are generated dynamically from the notebook's `schema.yaml`. Run `lab-notebook schema` to see available fields and their types. Fields vary depending on which template was used.
 
-The default schema includes:
+For example, the `research-notebook` template (the default) includes:
 - `--repo` — text field (e.g. `research-lrn091`)
 - `--branch` — text field (e.g. `main`)
 - `--tags` — list field, comma-separated (e.g. `mae,masking,phase0`)
 - `--artifacts` — list field, comma-separated (e.g. `research-lrn091:results/S01.csv`)
+
+The `ml-experiment-log` template includes fields like `--method`, `--dataset`, `--backbone`, `--epochs`, `--lr`, `--gpu_hours`, `--loss`, etc.
+
+### Templates
+
+Two bundled schema templates ship with the tool:
+- `research-notebook` (default) — observations, decisions, dead-ends, questions, milestones
+- `ml-experiment-log` — run-start, run-end, config-change, crash, checkpoint, comparison
+
+```bash
+# List available templates
+lab-notebook template
+
+# Initialize a new notebook with a specific template
+lab-notebook init /path/to/notebook --template ml-experiment-log
+
+# Apply a template to an existing notebook (overwrites schema.yaml)
+lab-notebook template ml-experiment-log --force
+```
 
 ### Extra fields (`--extra`)
 
