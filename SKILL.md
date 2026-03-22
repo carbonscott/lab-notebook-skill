@@ -1,0 +1,119 @@
+---
+name: lab-notebook
+description: "Log and query research notebook entries. Use when the user asks to record observations, decisions, dead-ends, questions, or milestones. Also use when they ask what we've tried, what decisions were made, or want to search the notebook. Trigger on: 'log this', 'note this', 'record', 'what have we tried', 'what did we decide', 'search the notebook', 'document progress', 'what dead-ends', 'what's open'."
+user-invocable: true
+argument-hint: <action or query>
+---
+
+# Lab Notebook
+
+A structured, append-only research notebook shared across repos, agents, and humans.
+
+## Prerequisites
+
+These environment variables must be set (source the notebook's `.env` file):
+
+- `LAB_NOTEBOOK_DIR` — path to the notebook data directory
+- `LAB_NOTEBOOK_WRITER` — your writer ID (defaults to `$USER`)
+
+If `LAB_NOTEBOOK_DIR` is not set, tell the user to run `lab-notebook init` first.
+
+## Logging Entries
+
+To record something, run `lab-notebook emit`. Two flags are required: `--context` and `--type`. Content is a positional argument.
+
+```bash
+lab-notebook emit --context <context> --type <type> [--repo X] [--branch X] [--tags t1,t2] [--artifacts a1,a2] "content"
+```
+
+### Choosing the type
+
+Pick the type that matches what the user is communicating:
+
+| Type | When to use | Example trigger |
+|------|-------------|-----------------|
+| `observation` | User reports a measurement, finding, or noticed behavior | "I saw that...", "the loss is...", "it turns out..." |
+| `decision` | User made or confirmed a choice | "let's go with...", "we decided...", "use X because Y" |
+| `dead-end` | Something was tried and failed | "that didn't work", "X failed because Y", "don't try X" |
+| `question` | An open question that needs investigation | "we don't know...", "should we...", "what if..." |
+| `milestone` | Something is done, working, merged, or shipped | "X is complete", "merged PR", "pipeline working" |
+
+### Choosing the context
+
+Use hierarchical `project/topic` naming. Context groups related entries into a research thread.
+
+Examples: `maxie/ssl-comparison`, `maxie/scaling-laws`, `broker/migration`, `data/loading-pipeline`
+
+If unsure, ask the user what context this falls under, or check existing contexts with `lab-notebook contexts`.
+
+### Writing content
+
+Summarize the key insight in 1-3 sentences. Do not dump the entire conversation — distill it. Include specific numbers, file names, or commit hashes when relevant.
+
+### Optional flags
+
+- `--repo` — which repo this relates to (e.g. `research-lrn091`)
+- `--branch` — branch name at time of writing
+- `--tags` — comma-separated for additional filtering (e.g. `mae,masking,phase0`)
+- `--artifacts` — comma-separated paths to result files (e.g. `research-lrn091:results/S01.csv`)
+
+## Querying
+
+Three approaches, from simplest to most powerful:
+
+### Quick search
+
+```bash
+lab-notebook search "broker manifest"
+lab-notebook search "scaling" --context maxie/scaling-laws --type decision
+```
+
+### Raw SQL
+
+For structured queries, use `lab-notebook sql`. Run `lab-notebook schema` first if you need to see the table structure and example queries.
+
+```bash
+# Recent entries
+lab-notebook sql "SELECT ts, type, substr(content,1,80) FROM entries ORDER BY ts DESC LIMIT 10"
+
+# All dead-ends
+lab-notebook sql "SELECT context, ts, substr(content,1,80) FROM entries WHERE type='dead-end' ORDER BY ts DESC"
+
+# Decisions in a context
+lab-notebook sql "SELECT ts, substr(content,1,80) FROM entries WHERE context='maxie/ssl-comparison' AND type='decision'"
+
+# Entries by tag
+lab-notebook sql "SELECT ts, context, type FROM entries WHERE EXISTS (SELECT 1 FROM json_each(tags) WHERE value='scaling')"
+```
+
+### List contexts
+
+```bash
+lab-notebook contexts
+```
+
+Shows all research threads with entry counts and date ranges. Use this for orientation when you don't know what contexts exist.
+
+## Examples
+
+**User says:** "log the decision that we're using cxi101235425 for early phase"
+
+```bash
+lab-notebook emit --context maxie/data-strategy --type decision \
+    --tags phase0,data-selection \
+    "Use only cxi101235425 for the early phase. Single-experiment training removes detector geometry and intensity distribution as confounders during initial SSL method comparison."
+```
+
+**User says:** "what dead-ends have we hit?"
+
+```bash
+lab-notebook sql "SELECT ts, context, substr(content,1,100) FROM entries WHERE type='dead-end' ORDER BY ts DESC"
+```
+
+**User says:** "search for anything about the broker"
+
+```bash
+lab-notebook search "broker"
+```
+
+$ARGUMENTS
