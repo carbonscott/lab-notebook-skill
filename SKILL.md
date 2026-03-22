@@ -23,12 +23,14 @@ If `LAB_NOTEBOOK_DIR` is not set, tell the user to run `lab-notebook init` first
 To record something, run `lab-notebook emit`. Two flags are required: `--context` and `--type`. Content is a positional argument.
 
 ```bash
-lab-notebook emit --context <context> --type <type> [--repo X] [--branch X] [--tags t1,t2] [--artifacts a1,a2] "content"
+lab-notebook emit --context <context> --type <type> [--field value] [--extra K=V] "content"
 ```
 
 ### Choosing the type
 
-Pick the type that matches what the user is communicating:
+Types are defined in the notebook's `schema.yaml` and may vary per notebook. Run `lab-notebook schema` to see available types.
+
+The default types and when to use them:
 
 | Type | When to use | Example trigger |
 |------|-------------|-----------------|
@@ -50,12 +52,29 @@ If unsure, ask the user what context this falls under, or check existing context
 
 Summarize the key insight in 1-3 sentences. Do not dump the entire conversation — distill it. Include specific numbers, file names, or commit hashes when relevant.
 
-### Optional flags
+### Schema-defined flags
 
-- `--repo` — which repo this relates to (e.g. `research-lrn091`)
-- `--branch` — branch name at time of writing
-- `--tags` — comma-separated for additional filtering (e.g. `mae,masking,phase0`)
-- `--artifacts` — comma-separated paths to result files (e.g. `research-lrn091:results/S01.csv`)
+CLI flags are generated dynamically from the notebook's `schema.yaml`. Run `lab-notebook schema` to see available fields and their types.
+
+The default schema includes:
+- `--repo` — text field (e.g. `research-lrn091`)
+- `--branch` — text field (e.g. `main`)
+- `--tags` — list field, comma-separated (e.g. `mae,masking,phase0`)
+- `--artifacts` — list field, comma-separated (e.g. `research-lrn091:results/S01.csv`)
+
+### Extra fields (`--extra`)
+
+For one-off fields not declared in `schema.yaml`, use `--extra key=value` (repeatable):
+
+```bash
+lab-notebook emit --context proj/topic --type observation \
+    --extra reviewer=alice --extra priority=high \
+    "Found a regression in the validation set."
+```
+
+- Stored as top-level keys in JSONL, as a JSON blob column in SQLite
+- Values are always strings (use schema fields for typed data)
+- Cannot collide with core field names (id, ts, writer_id, context, type, content) or schema field names
 
 ## Querying
 
