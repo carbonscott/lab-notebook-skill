@@ -27,10 +27,10 @@ Before executing any command, run the **Environment Check**. If it fails, run **
 ## Environment Check
 
 ```bash
-echo "LAB_NOTEBOOK_DIR=${LAB_NOTEBOOK_DIR:-<unset>}"
+test -n "$LAB_NOTEBOOK_DIR" && echo "LAB_NOTEBOOK_DIR=$LAB_NOTEBOOK_DIR" || echo "LAB_NOTEBOOK_DIR is unset"
 ```
 
-If `LAB_NOTEBOOK_DIR` is unset, tell the user:
+If the output shows `LAB_NOTEBOOK_DIR is unset`, tell the user:
 
 > Your notebook isn't configured yet. Running onboard setup...
 
@@ -82,9 +82,15 @@ If the init command fails (non-zero exit), tell the user:
 
 Do not proceed past this step on failure.
 
-### Step 3: Persist the environment
+### Step 3: Set and persist the environment
 
-Tell the user to add to their shell profile (or a project `.env`):
+First, export the variable in the current session so subsequent commands work immediately:
+
+```bash
+export LAB_NOTEBOOK_DIR="<chosen path>"
+```
+
+Then tell the user to add to their shell profile (or a project `.env`) for future sessions:
 
 ```bash
 export LAB_NOTEBOOK_DIR="<chosen path>"
@@ -160,7 +166,7 @@ lab-notebook emit \
     "content"
 ```
 
-**Content**: distill to 1-3 sentences. Include specific numbers, file names, or commit hashes. Do not transcribe.
+**Content**: should be 1-3 sentences with specific numbers, file names, or commit hashes. If you chose option C above, the content is already distilled — use it as-is.
 
 Present for confirmation, showing the actual notebook path:
 
