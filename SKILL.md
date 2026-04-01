@@ -1,127 +1,218 @@
 ---
-name: lab-notebook
+name: lnb
 description: "Log and query research notebook entries. Use when the user asks to record observations, decisions, dead-ends, questions, or milestones. Also use when they ask what we've tried, what decisions were made, or want to search the notebook. Trigger on: 'log this', 'note this', 'record', 'what have we tried', 'what did we decide', 'search the notebook', 'document progress', 'what dead-ends', 'what's open'."
 user-invocable: true
-argument-hint: <action or query>
+argument-hint: "<log|recall|onboard> [args...]"
 ---
 
-# Lab Notebook
+# Lab Notebook (`/lnb`)
 
-A structured, append-only research notebook shared across repos, agents, and humans.
+A structured, append-only research notebook.
 
-## Prerequisites
+## Command Dispatch
 
-These environment variables must be set (source the notebook's `.env` file):
+Parse the first word of `$ARGUMENTS`:
 
-- `LAB_NOTEBOOK_DIR` — path to the notebook data directory
-- `LAB_NOTEBOOK_WRITER` — your writer ID (defaults to `$USER`)
+| Command | Action |
+|---------|--------|
+| `log` | Go to **Log** |
+| `recall` | Go to **Recall** |
+| `onboard` | Go to **Onboard** |
+| *(empty or unrecognized)* | Show usage: `/lnb log <what to log>`, `/lnb recall <question>`, `/lnb onboard` |
 
-If `LAB_NOTEBOOK_DIR` is not set, tell the user to run `lab-notebook init` first.
+Before executing any command, run the **Environment Check**. If it fails, run **Onboard** first, then return to the original command.
 
-## Logging Entries
+---
 
-To record something, run `lab-notebook emit`. Two flags are required: `--context` and `--type`. Content is a positional argument.
+## Environment Check
 
 ```bash
-lab-notebook emit --context <context> --type <type> [--field value] [--extra K=V] "content"
+echo "LAB_NOTEBOOK_DIR=${LAB_NOTEBOOK_DIR:-<unset>}"
 ```
 
-### Choosing the type
+If `LAB_NOTEBOOK_DIR` is unset, tell the user:
 
-Types are defined in the notebook's `schema.yaml` and may vary per notebook. Run `lab-notebook schema` to see available types.
+> Your notebook isn't configured yet. Running onboard setup...
 
-The default types and when to use them:
+Then run **Onboard**. After it completes, return to the original command.
 
-| Type | When to use | Example trigger |
-|------|-------------|-----------------|
-| `observation` | User reports a measurement, finding, or noticed behavior | "I saw that...", "the loss is...", "it turns out..." |
-| `decision` | User made or confirmed a choice | "let's go with...", "we decided...", "use X because Y" |
-| `dead-end` | Something was tried and failed | "that didn't work", "X failed because Y", "don't try X" |
-| `question` | An open question that needs investigation | "we don't know...", "should we...", "what if..." |
-| `milestone` | Something is done, working, merged, or shipped | "X is complete", "merged PR", "pipeline working" |
+---
 
-### Choosing the context
+## Onboard
 
-Use hierarchical `project/topic` naming. Context groups related entries into a research thread.
+One-time setup. Go step by step and confirm before writing anything.
 
-Examples: `maxie/ssl-comparison`, `maxie/scaling-laws`, `broker/migration`, `data/loading-pipeline`
+### Step 1: Pick a notebook path
 
-If unsure, ask the user what context this falls under, or check existing contexts with `lab-notebook contexts`.
+Ask:
 
-### Writing content
+> Where should your notebook live? (e.g. `~/lab-notebook`, `/proj/myproject/notebook`)
 
-Summarize the key insight in 1-3 sentences. Do not dump the entire conversation — distill it. Include specific numbers, file names, or commit hashes when relevant.
+If the user declines, is unsure, or doesn't answer:
 
-### Schema-defined flags
+> No problem — I can use the global default at `~/lab-notebook`. Want me to use that?
 
-CLI flags are generated dynamically from the notebook's `schema.yaml`. Run `lab-notebook schema` to see available fields and their types. Fields vary depending on which template was used.
+- If they agree: use `LAB_NOTEBOOK_DIR="$HOME/lab-notebook"` and continue.
+- If they decline again: tell them the skill needs `$LAB_NOTEBOOK_DIR` to work, and offer to run `/lnb onboard` whenever they're ready. Stop here.
 
-For example, the `research-notebook` template (the default) includes:
-- `--repo` — text field (e.g. `research-lrn091`)
-- `--branch` — text field (e.g. `main`)
-- `--tags` — list field, comma-separated (e.g. `mae,masking,phase0`)
-- `--artifacts` — list field, comma-separated (e.g. `research-lrn091:results/S01.csv`)
+Also ask (optional):
 
-The `ml-experiment-log` template includes fields like `--method`, `--dataset`, `--backbone`, `--epochs`, `--lr`, `--gpu_hours`, `--loss`, etc.
+> What writer ID should be used for your entries? (defaults to `$USER` = your current username)
 
-### Templates
+Set `LAB_NOTEBOOK_WRITER` only if they provide a value different from `$USER`.
 
-Two bundled schema templates ship with the tool:
-- `research-notebook` (default) — observations, decisions, dead-ends, questions, milestones
-- `ml-experiment-log` — run-start, run-end, config-change, crash, checkpoint, comparison
+### Step 2: Initialize the notebook
+
+First check if the notebook already exists:
 
 ```bash
-# List available templates
-lab-notebook template
-
-# Initialize a new notebook with a specific template
-lab-notebook init /path/to/notebook --template ml-experiment-log
-
-# Apply a template to an existing notebook (overwrites schema.yaml)
-lab-notebook template ml-experiment-log --force
+ls "$LAB_NOTEBOOK_DIR/schema.yaml" 2>/dev/null && echo "EXISTS" || echo "NEW"
 ```
 
-### Extra fields (`--extra`)
-
-For one-off fields not declared in `schema.yaml`, use `--extra key=value` (repeatable):
+- If `EXISTS`: tell the user "Notebook already initialized at `<path>` — skipping init." Proceed to Step 4.
+- If `NEW`: run:
 
 ```bash
-lab-notebook emit --context proj/topic --type observation \
-    --extra reviewer=alice --extra priority=high \
-    "Found a regression in the validation set."
+mkdir -p "$LAB_NOTEBOOK_DIR" && lab-notebook init "$LAB_NOTEBOOK_DIR"
 ```
 
-- Stored as top-level keys in JSONL, as a JSON blob column in SQLite
-- Values are always strings (use schema fields for typed data)
-- Cannot collide with core field names (id, ts, writer_id, context, type, content) or schema field names
+If the init command fails (non-zero exit), tell the user:
 
-## Querying
+> Init failed. Check that the path is writable: `ls -ld "<path>"`
 
-Three approaches, from simplest to most powerful:
+Do not proceed past this step on failure.
 
-### Quick search
+### Step 3: Persist the environment
+
+Tell the user to add to their shell profile (or a project `.env`):
 
 ```bash
-lab-notebook search "broker manifest"
-lab-notebook search "scaling" --context maxie/scaling-laws --type decision
+export LAB_NOTEBOOK_DIR="<chosen path>"
+export LAB_NOTEBOOK_WRITER="<username>"  # optional, defaults to $USER
 ```
 
-### Raw SQL
-
-For structured queries, use `lab-notebook sql`. Run `lab-notebook schema` first if you need to see the table structure and example queries.
+### Step 4: Confirm
 
 ```bash
-# Recent entries
-lab-notebook sql "SELECT ts, type, substr(content,1,80) FROM entries ORDER BY ts DESC LIMIT 10"
+lab-notebook schema
+```
 
-# All dead-ends
-lab-notebook sql "SELECT context, ts, substr(content,1,80) FROM entries WHERE type='dead-end' ORDER BY ts DESC"
+Show the output to the user. If this succeeds, tell them they're ready. If it fails, tell them init may not have completed successfully and suggest re-running `/lnb onboard`.
 
-# Decisions in a context
-lab-notebook sql "SELECT ts, substr(content,1,80) FROM entries WHERE context='maxie/ssl-comparison' AND type='decision'"
+---
 
-# Entries by tag
-lab-notebook sql "SELECT ts, context, type FROM entries WHERE EXISTS (SELECT 1 FROM json_each(tags) WHERE value='scaling')"
+## Log
+
+Emit an entry to the notebook. Content comes from `$ARGUMENTS` after the `log` keyword.
+
+If no content was provided after `log`, ask:
+
+> What would you like to log?
+
+### Step 1: Infer the entry type
+
+From the content itself, infer the most likely type before running `lab-notebook schema`:
+
+- Mentions trying/failing/didn't work/broke → `dead-end`
+- Mentions deciding/going with/choosing/we'll use → `decision`
+- Mentions done/merged/shipped/working/complete → `milestone`
+- Mentions wondering/should we/open question/what if → `question`
+- Anything else (a measurement, finding, behavior) → `observation`
+
+Propose the inferred type to the user:
+
+> Looks like a **decision**. Correct, or different type?
+
+Only run `lab-notebook schema` if they want to see available types.
+
+### Step 2: Pick the context
+
+Use `topic/subtopic` slugs, e.g. `ssl/pretraining`, `data/loading`. Check existing contexts:
+
+```bash
+lab-notebook contexts
+```
+
+Infer from conversation context when possible. Ask only if unclear.
+
+### Step 3: Check content length
+
+Before drafting, assess whether the content is too long to fit in a single entry (longer than ~3 sentences, or contains raw output, data dumps, or multiple distinct ideas).
+
+If it is, present the user with options **before** drafting the emit command:
+
+> This seems like a lot for one entry. How would you like to handle it?
+>
+> **A — Reference a file**: Keep the entry concise and attach the details via `--artifacts <path/to/file>`. Best when the bulk is data, code, or output that lives in a file.
+>
+> **B — Break it up**: Split into separate `/lnb log` calls — one per distinct insight or decision. Best when there are multiple ideas bundled together.
+>
+> **C — Distill it**: Summarize to 1-3 sentences capturing the key insight. Best when it's one dense thought that can be compressed.
+
+Wait for the user's choice before proceeding.
+
+### Step 4: Draft and confirm
+
+```bash
+lab-notebook emit \
+    --context <context> --type <type> \
+    [--artifacts <path>] \
+    "content"
+```
+
+**Content**: distill to 1-3 sentences. Include specific numbers, file names, or commit hashes. Do not transcribe.
+
+Present for confirmation, showing the actual notebook path:
+
+> **Notebook**: `<actual value of $LAB_NOTEBOOK_DIR>`
+> **Type**: decision | **Context**: ssl/pretraining
+>
+> ```bash
+> lab-notebook emit --context ssl/pretraining --type decision "..."
+> ```
+>
+> OK to emit, or adjust?
+
+Only execute after the user confirms.
+
+---
+
+## Recall
+
+Search the notebook to answer a question. Query comes from `$ARGUMENTS` after the `recall` keyword.
+
+No confirmation needed — reads are non-destructive.
+
+**If no query was provided**, show recent entries as a default:
+
+```bash
+lab-notebook sql \
+  "SELECT ts, type, context, substr(content,1,100) FROM entries ORDER BY ts DESC LIMIT 10"
+```
+
+**Otherwise**, pick the approach based on the question:
+
+- Open-ended or keyword question → keyword search
+- "What have we tried / decided / hit?" → SQL filtered by type
+- "What contexts / topics exist?" → list contexts
+- Counts, date ranges, comparisons → SQL
+
+### Keyword search
+
+```bash
+lab-notebook search "<keywords>"
+lab-notebook search "<keywords>" --type dead-end
+lab-notebook search "<keywords>" --context ssl/pretraining
+```
+
+### SQL (for structured questions)
+
+```bash
+lab-notebook sql \
+  "SELECT ts, type, substr(content,1,80) FROM entries ORDER BY ts DESC LIMIT 10"
+
+lab-notebook sql \
+  "SELECT context, ts, substr(content,1,80) FROM entries WHERE type='dead-end' ORDER BY ts DESC"
 ```
 
 ### List contexts
@@ -130,28 +221,39 @@ lab-notebook sql "SELECT ts, context, type FROM entries WHERE EXISTS (SELECT 1 F
 lab-notebook contexts
 ```
 
-Shows all research threads with entry counts and date ranges. Use this for orientation when you don't know what contexts exist.
+### Summarize
 
-## Examples
+Present a concise answer citing specific entries (timestamp, context, type). Do not dump raw output.
 
-**User says:** "log the decision that we're using cxi101235425 for early phase"
-
-```bash
-lab-notebook emit --context maxie/data-strategy --type decision \
-    --tags phase0,data-selection \
-    "Use only cxi101235425 for the early phase. Single-experiment training removes detector geometry and intensity distribution as confounders during initial SSL method comparison."
-```
-
-**User says:** "what dead-ends have we hit?"
+SQL queries use `substr(content,1,80)` by default for scanning. If the truncated preview isn't enough to answer the question, re-run without `substr()` to see the full content:
 
 ```bash
-lab-notebook sql "SELECT ts, context, substr(content,1,100) FROM entries WHERE type='dead-end' ORDER BY ts DESC"
+lab-notebook sql \
+  "SELECT ts, type, context, content FROM entries WHERE type='dead-end' ORDER BY ts DESC"
 ```
 
-**User says:** "search for anything about the broker"
+**If results are empty**, suggest recovery:
+
+> Nothing found. Try:
+> - Broader keywords (fewer or shorter terms)
+> - Drop `--type` or `--context` filters
+> - `/lnb recall` with no args to see recent entries
+> - `lab-notebook contexts` to see what topics exist
+
+---
+
+## Templates
 
 ```bash
-lab-notebook search "broker"
+# List available templates
+lab-notebook template
+
+# Initialize with a specific template
+lab-notebook init "$LAB_NOTEBOOK_DIR" --template ml-experiment-log
 ```
+
+Bundled templates:
+- `research-notebook` (default) — observations, decisions, dead-ends, questions, milestones
+- `ml-experiment-log` — run-start, run-end, config-change, crash, checkpoint, comparison
 
 $ARGUMENTS
