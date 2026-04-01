@@ -66,10 +66,10 @@ Set `LAB_NOTEBOOK_WRITER` only if they provide a value different from `$USER`.
 First check if the notebook already exists:
 
 ```bash
-ls "$LAB_NOTEBOOK_DIR/schema.yaml" 2>/dev/null && echo "EXISTS" || echo "NEW"
+test -f "$LAB_NOTEBOOK_DIR/schema.yaml" && echo "EXISTS" || echo "NEW"
 ```
 
-- If `EXISTS`: tell the user "Notebook already initialized at `<path>` — skipping init." Proceed to Step 4.
+- If `EXISTS`: tell the user "Notebook already initialized at `<path>` — skipping init." Proceed to Step 3.
 - If `NEW`: run:
 
 ```bash
@@ -157,6 +157,8 @@ If it is, present the user with options **before** drafting the emit command:
 
 Wait for the user's choice before proceeding.
 
+If user picks **A**, ask: "What file should I attach?" Then use the path as `--artifacts <path>` in Step 4.
+
 ### Step 4: Draft and confirm
 
 ```bash
@@ -174,7 +176,7 @@ Present for confirmation, showing the actual notebook path:
 > **Type**: decision | **Context**: ssl/pretraining
 >
 > ```bash
-> lab-notebook emit --context ssl/pretraining --type decision "..."
+> lab-notebook emit --context ssl/pretraining --type decision [--artifacts <path>] "..."
 > ```
 >
 > OK to emit, or adjust?
