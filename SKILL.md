@@ -2,7 +2,7 @@
 name: lnb
 description: "Log and query research notebook entries. Use when the user asks to record observations, decisions, dead-ends, questions, or milestones. Also use when they ask what we've tried, what decisions were made, or want to search the notebook. Trigger on: 'log this', 'note this', 'record', 'what have we tried', 'what did we decide', 'search the notebook', 'document progress', 'what dead-ends', 'what's open'."
 user-invocable: true
-argument-hint: "<log|recall|onboard> [args...]"
+argument-hint: "<log|recall|init|onboard> [args...]"
 ---
 
 # Lab Notebook (`/lnb`)
@@ -17,30 +17,82 @@ Parse the first word of `$ARGUMENTS`:
 |---------|--------|
 | `log` | Go to **Log** |
 | `recall` | Go to **Recall** |
+| `init` | Go to **Init** |
 | `onboard` | Go to **Onboard** |
-| *(empty or unrecognized)* | Show usage: `/lnb log <what to log>`, `/lnb recall <question>`, `/lnb onboard` |
+| *(empty or unrecognized)* | Show usage: `/lnb log <what to log>`, `/lnb recall <question>`, `/lnb init`, `/lnb onboard` |
 
-Before executing any command, run the **Environment Check**. If it fails, run **Onboard** first, then return to the original command.
+Before executing any command (except `init` and `onboard` themselves), run the **Environment Check**. If it fails, offer the user a choice between **Init** (project-local) and **Onboard** (global), then return to the original command.
 
 ---
 
 ## Environment Check
 
+The CLI handles notebook discovery automatically (`.lnb.env` walk-up → `$LAB_NOTEBOOK_DIR` → error). Verify it can find a notebook:
+
 ```bash
-test -n "$LAB_NOTEBOOK_DIR" && echo "LAB_NOTEBOOK_DIR=$LAB_NOTEBOOK_DIR" || echo "LAB_NOTEBOOK_DIR is unset"
+lab-notebook schema >/dev/null 2>&1 && echo "OK" || echo "NO_NOTEBOOK"
 ```
 
-If the output shows `LAB_NOTEBOOK_DIR is unset`, tell the user:
+- If `OK` → notebook found. Proceed.
+- If `NO_NOTEBOOK` → tell the user:
 
-> Your notebook isn't configured yet. Running onboard setup...
+> No notebook found. You can:
+> - `/lnb init` — set up a project-local notebook in this directory
+> - `/lnb onboard` — set up a global notebook
 
-Then run **Onboard**. After it completes, return to the original command.
+Wait for the user's choice. After setup completes, proceed directly to the original command.
+
+---
+
+## Init
+
+Project-local notebook setup. The CLI creates a `.lnb.env` file in the current directory and a notebook at `.lnb/` (or a custom path). All `lab-notebook` commands then auto-discover it.
+
+### Step 1: Pick a notebook path
+
+Ask:
+
+> Where should this project's notebook live? (default: `./.lnb` in the current directory)
+
+### Step 2: Run init
+
+```bash
+lab-notebook init --local [<path>]
+```
+
+Omit `<path>` to use the default `.lnb/`. The CLI will:
+- Create the notebook directory with `entries/`, `artifacts/`, `schema.yaml`, `.gitignore`
+- Write `.lnb.env` in the current directory
+- Warn if `.lnb.env` already exists (overwrites it)
+
+If the command fails, show the error and stop.
+
+### Step 3: Suggest .gitignore entries
+
+The CLI already suggests `.gitignore` additions in its output. If the user wants to add them, offer to append:
+
+```
+.lnb.env
+.lnb/
+```
+
+Wait for the user's preference before modifying `.gitignore`.
+
+### Step 4: Verify
+
+```bash
+lab-notebook schema
+```
+
+If it succeeds, tell them:
+
+> Project notebook ready. Any `lab-notebook` command in this directory (or subdirectories) will use this notebook.
 
 ---
 
 ## Onboard
 
-One-time setup. Go step by step and confirm before writing anything.
+One-time global setup. Go step by step and confirm before writing anything.
 
 ### Step 1: Pick a notebook path
 
