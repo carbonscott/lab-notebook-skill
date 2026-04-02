@@ -27,43 +27,26 @@ Before executing any command (except `init` and `onboard` themselves), run the *
 
 ## Environment Check
 
-First, check for a project-local `.lnb.env` in the current directory:
+The CLI handles notebook discovery automatically (`.lnb.env` walk-up → `$LAB_NOTEBOOK_DIR` → error). Verify it can find a notebook:
 
 ```bash
-if test -f ".lnb.env"; then
-  source .lnb.env 2>/dev/null
-  echo "LOCAL_ENV=true"
-  # Validate the path still exists
-  test -d "$LAB_NOTEBOOK_DIR" && echo "DIR_EXISTS=true" || echo "DIR_EXISTS=false"
-else
-  echo "LOCAL_ENV=false"
-fi
-echo "LAB_NOTEBOOK_DIR=${LAB_NOTEBOOK_DIR:-unset}"
+lab-notebook schema 2>&1 | head -1
 ```
 
-Resolution order:
-1. `.lnb.env` in the current working directory (project-local) — takes precedence
-2. `$LAB_NOTEBOOK_DIR` from the shell environment (global)
+- If it prints the schema table header → notebook found. Proceed.
+- If it prints an error about `LAB_NOTEBOOK_DIR` or `.lnb.env` → tell the user:
 
-**If `LOCAL_ENV=true` but `DIR_EXISTS=false`**: the `.lnb.env` points to a path that no longer exists. Tell the user:
-
-> Your `.lnb.env` points to `<path>`, but that directory doesn't exist. Re-run `/lnb init` to fix it, or delete `.lnb.env` to fall back to the global notebook.
-
-Do not proceed — wait for the user to fix this.
-
-**If `LAB_NOTEBOOK_DIR=unset`**: tell the user:
-
-> Your notebook isn't configured yet. You can:
+> No notebook found. You can:
 > - `/lnb init` — set up a project-local notebook in this directory
 > - `/lnb onboard` — set up a global notebook
 
-Then wait for the user's choice. After setup completes, proceed directly to the original command — do not re-run this Environment Check (it was just configured).
+Wait for the user's choice. After setup completes, proceed directly to the original command.
 
 ---
 
 ## Init
 
-Project-local notebook setup. Creates a `.lnb.env` file in the current directory so that `/lnb log` and `/lnb recall` use a project-specific notebook instead of the global one.
+Project-local notebook setup. The CLI creates a `.lnb.env` file in the current directory and a notebook at `.lnb/` (or a custom path). All `lab-notebook` commands then auto-discover it.
 
 ### Step 1: Pick a notebook path
 
@@ -71,97 +54,39 @@ Ask:
 
 > Where should this project's notebook live? (default: `./.lnb` in the current directory)
 
-If the user accepts the default or doesn't answer, use `<current working directory>/.lnb`.
-
-Resolve the path to an absolute path before proceeding:
+### Step 2: Run init
 
 ```bash
-readlink -f "<user-provided-path>"
+lab-notebook init --local [<path>]
 ```
 
-Use the resolved absolute path for all subsequent steps.
+Omit `<path>` to use the default `.lnb/`. The CLI will:
+- Create the notebook directory with `entries/`, `artifacts/`, `schema.yaml`, `.gitignore`
+- Write `.lnb.env` in the current directory
+- Warn if `.lnb.env` already exists (overwrites it)
 
-### Step 2: Initialize the notebook
+If the command fails, show the error and stop.
 
-First check if the notebook already exists:
+### Step 3: Suggest .gitignore entries
 
-```bash
-test -f "<chosen-path>/schema.yaml" && echo "EXISTS" || echo "NEW"
+The CLI already suggests `.gitignore` additions in its output. If the user wants to add them, offer to append:
+
 ```
-
-- If `EXISTS`: tell the user "Notebook already initialized at `<path>` — skipping init." Proceed to Step 3.
-- If `NEW`: run:
-
-```bash
-mkdir -p "<chosen-path>" && lab-notebook init "<chosen-path>"
+.lnb.env
+.lnb/
 ```
-
-If the init command fails, tell the user:
-
-> Init failed. Check that the path is writable: `ls -ld "<path>"`
-
-Do not proceed past this step on failure.
-
-### Step 3: Write `.lnb.env`
-
-First, check if `.lnb.env` already exists:
-
-```bash
-test -f .lnb.env && echo "EXISTS" || echo "NEW"
-```
-
-If `EXISTS`, show the user what it currently contains and ask:
-
-> `.lnb.env` already exists in this directory, pointing to `<current path>`. Overwrite with the new path? (y/n)
-
-Only proceed if the user confirms.
-
-Write a `.lnb.env` file in the current working directory:
-
-```bash
-cat > .lnb.env << 'ENVEOF'
-# Project-local lab-notebook configuration
-# Created by /lnb init
-export LAB_NOTEBOOK_DIR="<absolute-path>"
-ENVEOF
-```
-
-If the user provided a custom writer ID, also include:
-
-```bash
-echo 'export LAB_NOTEBOOK_WRITER="<writer-id>"' >> .lnb.env
-```
-
-### Step 4: Suggest .gitignore entries
-
-Check if `.gitignore` exists and whether it already covers these paths:
-
-```bash
-test -f .gitignore && grep -q '.lnb' .gitignore && echo "COVERED" || echo "NOT_COVERED"
-```
-
-If not covered, suggest:
-
-> You may want to add these to `.gitignore`:
-> ```
-> .lnb.env
-> .lnb/
-> ```
-> Or commit them if the notebook should be shared with the team. Add to `.gitignore`?
 
 Wait for the user's preference before modifying `.gitignore`.
 
-### Step 5: Verify
-
-Export the variable in the current session and verify:
+### Step 4: Verify
 
 ```bash
-source .lnb.env && lab-notebook schema
+lab-notebook schema
 ```
 
-Show the output. If it succeeds, tell them:
+If it succeeds, tell them:
 
-> Project notebook ready at `<path>`. Any `/lnb log` or `/lnb recall` in this directory will use this notebook.
+> Project notebook ready. Any `lab-notebook` command in this directory (or subdirectories) will use this notebook.
 
 ---
 
