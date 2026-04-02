@@ -30,7 +30,14 @@ Before executing any command (except `init` and `onboard` themselves), run the *
 First, check for a project-local `.lnb.env` in the current directory:
 
 ```bash
-test -f ".lnb.env" && source .lnb.env && echo "LOCAL_ENV=true" || echo "LOCAL_ENV=false"
+if test -f ".lnb.env"; then
+  source .lnb.env 2>/dev/null
+  echo "LOCAL_ENV=true"
+  # Validate the path still exists
+  test -d "$LAB_NOTEBOOK_DIR" && echo "DIR_EXISTS=true" || echo "DIR_EXISTS=false"
+else
+  echo "LOCAL_ENV=false"
+fi
 echo "LAB_NOTEBOOK_DIR=${LAB_NOTEBOOK_DIR:-unset}"
 ```
 
@@ -38,13 +45,19 @@ Resolution order:
 1. `.lnb.env` in the current working directory (project-local) — takes precedence
 2. `$LAB_NOTEBOOK_DIR` from the shell environment (global)
 
-If the output shows `LAB_NOTEBOOK_DIR=unset`, tell the user:
+**If `LOCAL_ENV=true` but `DIR_EXISTS=false`**: the `.lnb.env` points to a path that no longer exists. Tell the user:
+
+> Your `.lnb.env` points to `<path>`, but that directory doesn't exist. Re-run `/lnb init` to fix it, or delete `.lnb.env` to fall back to the global notebook.
+
+Do not proceed — wait for the user to fix this.
+
+**If `LAB_NOTEBOOK_DIR=unset`**: tell the user:
 
 > Your notebook isn't configured yet. You can:
 > - `/lnb init` — set up a project-local notebook in this directory
 > - `/lnb onboard` — set up a global notebook
 
-Then wait for the user's choice. If the original command was `log` or `recall`, run the chosen setup first, then return to the original command.
+Then wait for the user's choice. After setup completes, proceed directly to the original command — do not re-run this Environment Check (it was just configured).
 
 ---
 
@@ -60,7 +73,13 @@ Ask:
 
 If the user accepts the default or doesn't answer, use `<current working directory>/.lnb`.
 
-Resolve the path to an absolute path before proceeding.
+Resolve the path to an absolute path before proceeding:
+
+```bash
+readlink -f "<user-provided-path>"
+```
+
+Use the resolved absolute path for all subsequent steps.
 
 ### Step 2: Initialize the notebook
 
@@ -84,6 +103,18 @@ If the init command fails, tell the user:
 Do not proceed past this step on failure.
 
 ### Step 3: Write `.lnb.env`
+
+First, check if `.lnb.env` already exists:
+
+```bash
+test -f .lnb.env && echo "EXISTS" || echo "NEW"
+```
+
+If `EXISTS`, show the user what it currently contains and ask:
+
+> `.lnb.env` already exists in this directory, pointing to `<current path>`. Overwrite with the new path? (y/n)
+
+Only proceed if the user confirms.
 
 Write a `.lnb.env` file in the current working directory:
 
