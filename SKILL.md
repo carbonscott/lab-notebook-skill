@@ -2,7 +2,7 @@
 name: lnb
 description: "Log and query research notebook entries. Use when the user asks to record observations, decisions, dead-ends, questions, or milestones. Also use when they ask what we've tried, what decisions were made, or want to search the notebook. Trigger on: 'log this', 'note this', 'record', 'what have we tried', 'what did we decide', 'search the notebook', 'document progress', 'what dead-ends', 'what's open'."
 user-invocable: true
-argument-hint: "<log|recall|onboard> [args...]"
+argument-hint: "<log|recall|init|onboard> [args...]"
 ---
 
 # Lab Notebook (`/lnb`)
@@ -17,30 +17,126 @@ Parse the first word of `$ARGUMENTS`:
 |---------|--------|
 | `log` | Go to **Log** |
 | `recall` | Go to **Recall** |
+| `init` | Go to **Init** |
 | `onboard` | Go to **Onboard** |
-| *(empty or unrecognized)* | Show usage: `/lnb log <what to log>`, `/lnb recall <question>`, `/lnb onboard` |
+| *(empty or unrecognized)* | Show usage: `/lnb log <what to log>`, `/lnb recall <question>`, `/lnb init`, `/lnb onboard` |
 
-Before executing any command, run the **Environment Check**. If it fails, run **Onboard** first, then return to the original command.
+Before executing any command (except `init` and `onboard` themselves), run the **Environment Check**. If it fails, offer the user a choice between **Init** (project-local) and **Onboard** (global), then return to the original command.
 
 ---
 
 ## Environment Check
 
+First, check for a project-local `.lnb.env` in the current directory:
+
 ```bash
-test -n "$LAB_NOTEBOOK_DIR" && echo "LAB_NOTEBOOK_DIR=$LAB_NOTEBOOK_DIR" || echo "LAB_NOTEBOOK_DIR is unset"
+test -f ".lnb.env" && source .lnb.env && echo "LOCAL_ENV=true" || echo "LOCAL_ENV=false"
+echo "LAB_NOTEBOOK_DIR=${LAB_NOTEBOOK_DIR:-unset}"
 ```
 
-If the output shows `LAB_NOTEBOOK_DIR is unset`, tell the user:
+Resolution order:
+1. `.lnb.env` in the current working directory (project-local) — takes precedence
+2. `$LAB_NOTEBOOK_DIR` from the shell environment (global)
 
-> Your notebook isn't configured yet. Running onboard setup...
+If the output shows `LAB_NOTEBOOK_DIR=unset`, tell the user:
 
-Then run **Onboard**. After it completes, return to the original command.
+> Your notebook isn't configured yet. You can:
+> - `/lnb init` — set up a project-local notebook in this directory
+> - `/lnb onboard` — set up a global notebook
+
+Then wait for the user's choice. If the original command was `log` or `recall`, run the chosen setup first, then return to the original command.
+
+---
+
+## Init
+
+Project-local notebook setup. Creates a `.lnb.env` file in the current directory so that `/lnb log` and `/lnb recall` use a project-specific notebook instead of the global one.
+
+### Step 1: Pick a notebook path
+
+Ask:
+
+> Where should this project's notebook live? (default: `./.lnb` in the current directory)
+
+If the user accepts the default or doesn't answer, use `<current working directory>/.lnb`.
+
+Resolve the path to an absolute path before proceeding.
+
+### Step 2: Initialize the notebook
+
+First check if the notebook already exists:
+
+```bash
+test -f "<chosen-path>/schema.yaml" && echo "EXISTS" || echo "NEW"
+```
+
+- If `EXISTS`: tell the user "Notebook already initialized at `<path>` — skipping init." Proceed to Step 3.
+- If `NEW`: run:
+
+```bash
+mkdir -p "<chosen-path>" && lab-notebook init "<chosen-path>"
+```
+
+If the init command fails, tell the user:
+
+> Init failed. Check that the path is writable: `ls -ld "<path>"`
+
+Do not proceed past this step on failure.
+
+### Step 3: Write `.lnb.env`
+
+Write a `.lnb.env` file in the current working directory:
+
+```bash
+cat > .lnb.env << 'ENVEOF'
+# Project-local lab-notebook configuration
+# Created by /lnb init
+export LAB_NOTEBOOK_DIR="<absolute-path>"
+ENVEOF
+```
+
+If the user provided a custom writer ID, also include:
+
+```bash
+echo 'export LAB_NOTEBOOK_WRITER="<writer-id>"' >> .lnb.env
+```
+
+### Step 4: Suggest .gitignore entries
+
+Check if `.gitignore` exists and whether it already covers these paths:
+
+```bash
+test -f .gitignore && grep -q '.lnb' .gitignore && echo "COVERED" || echo "NOT_COVERED"
+```
+
+If not covered, suggest:
+
+> You may want to add these to `.gitignore`:
+> ```
+> .lnb.env
+> .lnb/
+> ```
+> Or commit them if the notebook should be shared with the team. Add to `.gitignore`?
+
+Wait for the user's preference before modifying `.gitignore`.
+
+### Step 5: Verify
+
+Export the variable in the current session and verify:
+
+```bash
+source .lnb.env && lab-notebook schema
+```
+
+Show the output. If it succeeds, tell them:
+
+> Project notebook ready at `<path>`. Any `/lnb log` or `/lnb recall` in this directory will use this notebook.
 
 ---
 
 ## Onboard
 
-One-time setup. Go step by step and confirm before writing anything.
+One-time global setup. Go step by step and confirm before writing anything.
 
 ### Step 1: Pick a notebook path
 
