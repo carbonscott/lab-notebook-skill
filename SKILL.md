@@ -30,11 +30,11 @@ Before executing any command (except `init` and `onboard` themselves), run the *
 The CLI handles notebook discovery automatically (`.lnb.env` walk-up → `$LAB_NOTEBOOK_DIR` → error). Verify it can find a notebook:
 
 ```bash
-lab-notebook schema 2>&1 | head -1
+lab-notebook schema >/dev/null 2>&1 && echo "OK" || echo "NO_NOTEBOOK"
 ```
 
-- If it prints the schema table header → notebook found. Proceed.
-- If it prints an error about `LAB_NOTEBOOK_DIR` or `.lnb.env` → tell the user:
+- If `OK` → notebook found. Proceed.
+- If `NO_NOTEBOOK` → tell the user:
 
 > No notebook found. You can:
 > - `/lnb init` — set up a project-local notebook in this directory
