@@ -115,17 +115,23 @@ Set `LAB_NOTEBOOK_WRITER` only if they provide a value different from `$USER`.
 
 ### Step 2: Initialize the notebook
 
-First check if the notebook already exists:
+First check if the notebook already exists. The CLI always creates a `.lnb/` subdirectory inside the given path:
 
 ```bash
-test -f "$LAB_NOTEBOOK_DIR/schema.yaml" && echo "EXISTS" || echo "NEW"
+test -f "$LAB_NOTEBOOK_DIR/.lnb/schema.yaml" && echo "EXISTS" || echo "NEW"
 ```
 
-- If `EXISTS`: tell the user "Notebook already initialized at `<path>` — skipping init." Proceed to Step 3.
+- If `EXISTS`: tell the user "Notebook already initialized at `<path>/.lnb/` — skipping init." Proceed to Step 3.
 - If `NEW`: run:
 
 ```bash
-mkdir -p "$LAB_NOTEBOOK_DIR" && lab-notebook init "$LAB_NOTEBOOK_DIR"
+lab-notebook init "$LAB_NOTEBOOK_DIR"
+```
+
+This creates the notebook at `$LAB_NOTEBOOK_DIR/.lnb/` and writes `.lnb.env` in the current directory. Since this is global setup, the `.lnb.env` file is not needed — clean it up:
+
+```bash
+rm -f .lnb.env
 ```
 
 If the init command fails (non-zero exit), tell the user:
@@ -136,16 +142,16 @@ Do not proceed past this step on failure.
 
 ### Step 3: Set and persist the environment
 
-First, export the variable in the current session so subsequent commands work immediately:
+The notebook lives at `<chosen path>/.lnb/`, so the env var must point there. Export in the current session:
 
 ```bash
-export LAB_NOTEBOOK_DIR="<chosen path>"
+export LAB_NOTEBOOK_DIR="<chosen path>/.lnb"
 ```
 
 Then tell the user to add to their shell profile (or a project `.env`) for future sessions:
 
 ```bash
-export LAB_NOTEBOOK_DIR="<chosen path>"
+export LAB_NOTEBOOK_DIR="<chosen path>/.lnb"
 export LAB_NOTEBOOK_WRITER="<username>"  # optional, defaults to $USER
 ```
 
