@@ -57,7 +57,7 @@ Ask:
 ### Step 2: Run init
 
 ```bash
-lab-notebook init --local [<path>]
+lab-notebook init [<path>]
 ```
 
 Omit `<path>` to use the default `.lnb/`. The CLI will:
