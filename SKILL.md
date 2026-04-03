@@ -115,13 +115,13 @@ Set `LAB_NOTEBOOK_WRITER` only if they provide a value different from `$USER`.
 
 ### Step 2: Initialize the notebook
 
-First check if the notebook already exists. The CLI always creates a `.lnb/` subdirectory inside the given path:
+First check if the notebook already exists. The CLI always creates a `.lnb/` subdirectory inside the given path. Check both locations to handle re-runs (where `LAB_NOTEBOOK_DIR` already ends in `.lnb`):
 
 ```bash
-test -f "$LAB_NOTEBOOK_DIR/.lnb/schema.yaml" && echo "EXISTS" || echo "NEW"
+(test -f "$LAB_NOTEBOOK_DIR/schema.yaml" || test -f "$LAB_NOTEBOOK_DIR/.lnb/schema.yaml") && echo "EXISTS" || echo "NEW"
 ```
 
-- If `EXISTS`: tell the user "Notebook already initialized at `<path>/.lnb/` — skipping init." Proceed to Step 3.
+- If `EXISTS`: tell the user "Notebook already initialized — skipping init." Proceed to Step 3.
 - If `NEW`: run:
 
 ```bash
