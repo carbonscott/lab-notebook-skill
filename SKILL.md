@@ -57,7 +57,7 @@ Ask:
 ### Step 2: Run init
 
 ```bash
-lab-notebook init --local [<path>]
+lab-notebook init [<path>]
 ```
 
 Omit `<path>` to use the default `.lnb/`. The CLI will:
@@ -308,12 +308,17 @@ lab-notebook sql \
 # List available templates
 lab-notebook template
 
-# Initialize with a specific template
+# Initialize with a bundled template
 lab-notebook init "$LAB_NOTEBOOK_DIR" --template ml-experiment-log
+
+# Initialize with a schema file shipped by the current project
+lab-notebook init --template-path ./my-schema.yaml
 ```
 
 Bundled templates:
 - `research-notebook` (default) — observations, decisions, dead-ends, questions, milestones
 - `ml-experiment-log` — run-start, run-end, config-change, crash, checkpoint, comparison
+
+Use `--template-path` when your project ships its own schema file rather than relying on a bundled template. Mutually exclusive with `--template`.
 
 $ARGUMENTS
