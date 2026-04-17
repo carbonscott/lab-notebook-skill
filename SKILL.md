@@ -89,9 +89,9 @@ Wait for the user's preference before modifying `.gitignore`.
 - If `OK` → proceed to Step 5.
 - If `SHADOWED: <path>` → tell the user:
 
-> `$LAB_NOTEBOOK_DIR` is exported and points at `<path>`. The new project notebook won't be used until you either `unset LAB_NOTEBOOK_DIR` in this shell or remove the export from your shell profile.
+> `$LAB_NOTEBOOK_DIR` is exported and points at `<path>`. The new project notebook won't be used until you remove the export from your shell profile and **restart Claude Code** — each `bash` tool call inherits env vars from Claude's own process, so unsetting it in your terminal (or inside a single tool call) won't propagate to the verify step below.
 
-Wait for them to clear the env var (or confirm they want the global notebook to keep winning) before proceeding.
+Wait for them to restart and re-run (or confirm they want the global notebook to keep winning) before proceeding.
 
 ### Step 5: Verify
 
