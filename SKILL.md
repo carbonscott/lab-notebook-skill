@@ -27,7 +27,7 @@ Before executing any command (except `init` and `onboard` themselves), run the *
 
 ## Environment Check
 
-The CLI handles notebook discovery automatically (`.lnb.env` walk-up → `$LAB_NOTEBOOK_DIR` → error). Verify it can find a notebook:
+The CLI handles notebook discovery automatically (`$LAB_NOTEBOOK_DIR` → nearest `.lnb.env` walking up from CWD → error). Verify it can find a notebook:
 
 ```bash
 lab-notebook schema >/dev/null 2>&1 && echo "OK" || echo "NO_NOTEBOOK"
@@ -78,7 +78,22 @@ The CLI already suggests `.gitignore` additions in its output. If the user wants
 
 Wait for the user's preference before modifying `.gitignore`.
 
-### Step 4: Verify
+### Step 4: Check for a shadowing env var
+
+`$LAB_NOTEBOOK_DIR` takes precedence over `.lnb.env`. If it's already exported (e.g. from a shell profile or a prior `/lnb onboard`), the freshly-written project `.lnb.env` will be silently ignored.
+
+```bash
+[ -n "$LAB_NOTEBOOK_DIR" ] && echo "SHADOWED: $LAB_NOTEBOOK_DIR" || echo "OK"
+```
+
+- If `OK` → proceed to Step 5.
+- If `SHADOWED: <path>` → tell the user:
+
+> `$LAB_NOTEBOOK_DIR` is exported and points at `<path>`. The new project notebook won't be used until you either `unset LAB_NOTEBOOK_DIR` in this shell or remove the export from your shell profile.
+
+Wait for them to clear the env var (or confirm they want the global notebook to keep winning) before proceeding.
+
+### Step 5: Verify
 
 ```bash
 lab-notebook schema
